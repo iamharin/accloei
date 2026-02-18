@@ -92,7 +92,7 @@
 
 ```bash
 git clone https://github.com/iamharin/accloei.git
-cd accloei/accloei/ar-api-gateway/
+cd accloei/ar-api-gateway/
 ```
 
 ### 2. ตั้งค่าไฟล์ `.env`
