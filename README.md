@@ -85,7 +85,6 @@ SITE_ID=your_site_id
 HCODE=your_hcode
 ALLOWED_ORIGINS=http://server, http://localhost:3000
 
-ทางเลือก ที่ 1 
 4. การติดตั้งด้วย PM2
 PM2 เหมาะสำหรับการรันบน Server โดยตรง (Bare Metal / VM) โดยไม่ต้องใช้ Container PM2 จะดูแล Process ให้รันต่อเนื่องและ restart อัตโนมัติ
 
@@ -167,7 +166,6 @@ curl http://localhost:3001/health
 # ผลลัพธ์ที่คาดหวัง:
 { "status": "ok", "timestamp": "..." }
 
-ทางเลือกที่ 2 
 5. การติดตั้งด้วย Docker
 Docker เหมาะสำหรับการ Deploy แบบ Containerized ซึ่งช่วยให้ Environment เหมือนกันทุก Server และง่ายต่อการ Scale โดย docker-compose.yml รวม API Gateway และ MySQL ไว้ด้วยกัน
 
