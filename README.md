@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🏥 AR API Gateway
+# <img src="http://209.15.111.58/images/favicon.png"> AR API Gateway
 
 **Local API Gateway สำหรับระบบบริหารจัดการบัญชีลูกหนี้ (AR Management)**
 
