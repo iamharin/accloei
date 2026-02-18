@@ -13,7 +13,7 @@
 
 <br/>
 
-> Gateway กลางสำหรับเชื่อมต่อ Client กับฐานข้อมูล AR Management และ HosXP  
+> ACCLOEI Gateway กลางสำหรับเชื่อมต่อ Client กับฐานข้อมูล  AR Management และ HosXP  
 > รองรับ WebSocket Proxy, Rate Limiting, Authentication และ Auto-restart
 
 <br/>
@@ -43,7 +43,7 @@
 ```
 ┌─────────────────┐        WebSocket         ┌──────────────────┐
 │   Proxy Server  │ ◄──────────────────────► │  Gateway Client  │
-│ 209.15.111.58   │       (Port 8088)         │  (เครื่อง Client) │
+│                      │       (Port 8088)         │  (เครื่อง Client)  │
 └─────────────────┘                           └────────┬─────────┘
                                                        │ HTTP
                                                        ▼
@@ -190,13 +190,13 @@ NODE_ENV=production
 PORT=3001
 
 # ===== AR Management Database =====
-DB_HOST=192.168.1.211
-DB_USER=sa
+DB_HOST=xxx.xxx.xxx.xxx
+DB_USER=your_user
 DB_PASS=your_password
 DB_NAME=ar_management
 
 # ===== HosXP Database =====
-HOSXP_HOST=192.168.1.200
+HOSXP_HOST=xxx.xxx.xxx.xxx
 HOSXP_USER=your_user
 HOSXP_PASS=your_password
 HOSXP_NAME=hos
@@ -205,10 +205,10 @@ HOSXP_NAME=hos
 API_KEY=your_secret_api_key
 SITE_ID=your_site_id
 HCODE=your_hcode
-ALLOWED_ORIGINS=http://192.168.1.100,http://192.168.1.101
+ALLOWED_ORIGINS=http://your_ip1,http://youp_ip2
 
 # ===== WebSocket Client =====
-PROXY_SERVER=ws://209.15.111.58:8088
+PROXY_SERVER=ws://ip-server:8088
 LOCAL_API_URL=http://localhost:3001/api
 ```
 
@@ -280,9 +280,9 @@ Proxy Server → WebSocket → Gateway Client → HTTP → AR API Gateway → My
 
 **ค่าที่ต้องตั้งใน `.env`:**
 ```env
-SITE_ID=site-11034-01
+SITE_ID=your_site_id
 API_KEY=your_api_key
-PROXY_SERVER=ws://209.15.111.58:8088
+PROXY_SERVER=ws://ip-server:8088
 ```
 
 ---
