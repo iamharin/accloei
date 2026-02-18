@@ -1,80 +1,202 @@
+<div align="center">
 
+# 🏥 AR API Gateway
 
-คู่มือการติดตั้ง
-AR API Gateway
-สำหรับ Client / Endpoint
-รองรับการติดตั้งด้วย PM2 และ Docker
-เวอร์ชัน	1.0.0
-Port	3001
-Node.js	v18+
+**Local API Gateway สำหรับระบบบริหารจัดการบัญชีลูกหนี้ (AR Management)**
 
- 
-1. ภาพรวมระบบ
-AR API Gateway เป็น Local API Gateway ที่ทำหน้าที่เป็น middleware ระหว่าง Client Application กับฐานข้อมูล MySQL
-โดยรองรับการเชื่อมต่อ 2 ฐานข้อมูลหลัก ได้แก่
-ar_management และ HosXP
-พร้อมระบบ Authentication ด้วย API Key
+[![Node.js](https://img.shields.io/badge/Node.js-18+-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org)
+[![Express](https://img.shields.io/badge/Express-4.x-000000?style=for-the-badge&logo=express&logoColor=white)](https://expressjs.com)
+[![MySQL](https://img.shields.io/badge/MySQL-8.0-4479A1?style=for-the-badge&logo=mysql&logoColor=white)](https://mysql.com)
+[![PM2](https://img.shields.io/badge/PM2-Cluster-2B037A?style=for-the-badge&logo=pm2&logoColor=white)](https://pm2.keymetrics.io)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://docker.com)
+[![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
 
-1.1 คุณสมบัติหลัก
-•	Express.js framework พร้อม Helmet Security และ CORS
-•	Rate Limiting: 10,000 requests ต่อ 15 นาที
-•	Connection Pooling: 50 connections ต่อฐานข้อมูล
-•	Request Timeout: 60 วินาที
-•	Auto-restart ด้วย PM2 Cluster Mode (2 instances)
-•	Health Check endpoint: GET /health
-•	Log ด้วย Winston ไปยัง ./logs/
+<br/>
 
-1.2 Port และ Endpoint
-Endpoint	Method	คำอธิบาย
-/health	GET	ตรวจสอบสถานะ API Gateway
-/api/patients	GET	ดึงข้อมูลผู้ป่วย
-/api/ar-data	GET	ดึงข้อมูล AR
-/api/sync	POST	Sync ข้อมูล
+> Gateway กลางสำหรับเชื่อมต่อ Client กับฐานข้อมูล AR Management และ HosXP  
+> รองรับ WebSocket Proxy, Rate Limiting, Authentication และ Auto-restart
 
- 
-2. สิ่งที่ต้องเตรียมก่อนติดตั้ง
-2.1 ความต้องการของระบบ
-ซอฟต์แวร์	เวอร์ชันขั้นต่ำ	หมายเหตุ
-Node.js	v18.0+	Required (PM2 mode)
-npm	v8.0+	มาพร้อม Node.js
-PM2	v5.0+	เฉพาะ PM2 mode
-Docker	v20.0+	เฉพาะ Docker mode
-Docker Compose	v2.0+	เฉพาะ Docker mode
+<br/>
 
-2.2 การเข้าถึงฐานข้อมูล
-ก่อนติดตั้ง ต้องเตรียมข้อมูลการเชื่อมต่อฐานข้อมูลดังนี้
-•	ar_management Database: Host IP, Username, Password, Database name(insert,update,delete )
-•	HosXP Database: Host IP, Username, Password, Database name(SELECT only)
-•	ตรวจสอบว่า Server สามารถเชื่อมต่อ MySQL ได้บน Port 3306
+[📋 คู่มือติดตั้ง](#-การติดตั้ง) • [🔌 API Reference](#-api-endpoints) • [⚙️ Configuration](#️-configuration) • [🐛 Troubleshooting](#-troubleshooting)
 
-2.3 ไฟล์ที่จำเป็น
-โครงสร้างไฟล์โปรเจกต์ที่ต้องมี:
-ar-api-gateway/
-├── server.js
-├── package.json
-├── package-lock.json
-├── ecosystem.config.js   (สำหรับ PM2)
-├── Dockerfile            (สำหรับ Docker)
-├── docker-compose.yml    (สำหรับ Docker)
-├── .env                  (ต้องสร้างเอง)
-└── logs/                 (จะสร้างอัตโนมัติ)
+</div>
 
- 
-3. การตั้งค่าไฟล์ .env
-ทั้งการติดตั้งแบบ PM2 และ Docker ต้องมีไฟล์ .env อยู่ในโฟลเดอร์โปรเจกต์ สร้างไฟล์ชื่อ .env โดยมีเนื้อหาดังนี้:
+---
 
-# ===== Server Configuration =====
+## 📌 สารบัญ
+
+- [ภาพรวมระบบ](#-ภาพรวมระบบ)
+- [สิ่งที่ต้องเตรียม](#-สิ่งที่ต้องเตรียม)
+- [การติดตั้ง](#-การติดตั้ง)
+  - [แบบ PM2](#-วิธีที่-1-pm2-แนะนำสำหรับ-vps--server)
+  - [แบบ Docker](#-วิธีที่-2-docker)
+- [Configuration](#️-configuration)
+- [API Endpoints](#-api-endpoints)
+- [WebSocket Client](#-websocket-client)
+- [Troubleshooting](#-troubleshooting)
+
+---
+
+## 🏗 ภาพรวมระบบ
+
+```
+┌─────────────────┐        WebSocket         ┌──────────────────┐
+│   Proxy Server  │ ◄──────────────────────► │  Gateway Client  │
+│ 209.15.111.58   │       (Port 8088)         │  (เครื่อง Client) │
+└─────────────────┘                           └────────┬─────────┘
+                                                       │ HTTP
+                                                       ▼
+                                              ┌──────────────────┐
+                                              │  AR API Gateway  │
+                                              │   (Port 3001)    │
+                                              └────────┬─────────┘
+                                                       │
+                              ┌────────────────────────┤
+                              │                        │
+                     ┌────────▼────────┐    ┌──────────▼───────┐
+                     │  ar_management  │    │      HosXP       │
+                     │    Database     │    │    Database      │
+                     └─────────────────┘    └──────────────────┘
+```
+
+### ✨ คุณสมบัติหลัก
+
+| คุณสมบัติ | รายละเอียด |
+|-----------|-----------|
+| 🔐 Authentication | API Key + Site ID validation |
+| 🚦 Rate Limiting | 10,000 req / 15 นาที |
+| 🔄 Auto-restart | PM2 Cluster (2 instances) |
+| 🗄️ Connection Pool | 50 connections / ฐานข้อมูล |
+| ⏱️ Timeout | Request timeout 60 วินาที |
+| 📝 Logging | Winston → `./logs/` |
+| 🏥 Health Check | `GET /health` |
+
+---
+
+## 📦 สิ่งที่ต้องเตรียม
+
+| ซอฟต์แวร์ | เวอร์ชัน | PM2 | Docker |
+|-----------|---------|-----|--------|
+| Node.js | v18+ | ✅ | ❌ (อยู่ใน image) |
+| npm | v8+ | ✅ | ❌ |
+| PM2 | v5+ | ✅ | ❌ |
+| Docker | v20+ | ❌ | ✅ |
+| Docker Compose | v2+ | ❌ | ✅ |
+
+---
+
+## 🚀 การติดตั้ง
+
+### 1. Clone Repository
+
+```bash
+git clone https://github.com/iamharin/accloei.git
+cd accloei
+```
+
+### 2. ตั้งค่าไฟล์ `.env`
+
+```bash
+cp .env.example .env
+nano .env
+```
+
+> ดูรายละเอียดตัวแปรทั้งหมดได้ที่ [Configuration](#️-configuration)
+
+---
+
+### 🟢 วิธีที่ 1: PM2 (แนะนำสำหรับ VPS / Server)
+
+```bash
+# ติดตั้ง Node.js 18
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+sudo apt-get install -y nodejs
+
+# ติดตั้ง PM2
+npm install -g pm2
+
+# ติดตั้ง dependencies
+npm ci --only=production
+
+# Start
+pm2 start ecosystem.config.js
+
+# ตั้งค่า Auto-start เมื่อ reboot
+pm2 startup && pm2 save
+```
+
+**คำสั่ง PM2 ที่ใช้บ่อย:**
+
+```bash
+pm2 status                        # ดูสถานะ
+pm2 logs ar-api-gateway           # ดู logs real-time
+pm2 restart ar-api-gateway        # restart
+pm2 reload ar-api-gateway         # reload (zero-downtime)
+pm2 monit                         # monitor แบบ interactive
+```
+
+---
+
+### 🐳 วิธีที่ 2: Docker
+
+```bash
+# Start ทั้งหมด (API Gateway + MySQL)
+docker compose up -d --build
+
+# ดูสถานะ
+docker compose ps
+
+# ดู logs
+docker compose logs -f api-gateway
+```
+
+**กรณีใช้ MySQL ภายนอก (ไม่ต้องการ MySQL container):**
+
+```bash
+docker build -t ar-api-gateway .
+
+docker run -d \
+  --name ar-api-gateway \
+  -p 3001:3001 \
+  --env-file .env \
+  --restart unless-stopped \
+  -v $(pwd)/logs:/app/logs \
+  ar-api-gateway
+```
+
+---
+
+### ✅ ทดสอบการติดตั้ง
+
+```bash
+curl http://localhost:3001/health
+```
+
+**ผลลัพธ์ที่คาดหวัง:**
+```json
+{ "status": "ok", "timestamp": "2025-01-01T00:00:00.000Z" }
+```
+
+---
+
+## ⚙️ Configuration
+
+สร้างไฟล์ `.env` จาก `.env.example` แล้วแก้ค่าให้ตรงกับ environment:
+
+```env
+# ===== Server =====
 NODE_ENV=production
 PORT=3001
 
 # ===== AR Management Database =====
-DB_HOST=xxx.xxx.xxx.xxx
-DB_USER=username
+DB_HOST=192.168.1.211
+DB_USER=sa
 DB_PASS=your_password
 DB_NAME=ar_management
 
-# ===== HosXP Database(select only) =====
-HOSXP_HOST=xxx.xxx.xxx.xxx
+# ===== HosXP Database =====
+HOSXP_HOST=192.168.1.200
 HOSXP_USER=your_user
 HOSXP_PASS=your_password
 HOSXP_NAME=hos
@@ -83,248 +205,195 @@ HOSXP_NAME=hos
 API_KEY=your_secret_api_key
 SITE_ID=your_site_id
 HCODE=your_hcode
-ALLOWED_ORIGINS=http://server, http://localhost:3000
+ALLOWED_ORIGINS=http://192.168.1.100,http://192.168.1.101
 
-4. การติดตั้งด้วย PM2
-PM2 เหมาะสำหรับการรันบน Server โดยตรง (Bare Metal / VM) โดยไม่ต้องใช้ Container PM2 จะดูแล Process ให้รันต่อเนื่องและ restart อัตโนมัติ
+# ===== WebSocket Client =====
+PROXY_SERVER=ws://209.15.111.58:8088
+LOCAL_API_URL=http://localhost:3001/api
+```
 
-4.1 ติดตั้ง Node.js และ PM2
-สำหรับ Ubuntu/Debian:
-# ติดตั้ง Node.js 18
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-sudo apt-get install -y nodejs
+> ⚠️ **อย่า Commit ไฟล์ `.env` ขึ้น Git** เด็ดขาด เพราะมีข้อมูล Password และ API Key
 
-# ตรวจสอบเวอร์ชัน
-node --version    # ควรแสดง v18.x.x
-npm --version     # ควรแสดง v8.x.x หรือสูงกว่า
+---
 
-# ติดตั้ง PM2 แบบ Global
-npm install -g pm2
-pm2 --version     # ตรวจสอบเวอร์ชัน PM2
+## 🔌 API Endpoints
 
-สำหรับ Windows (PowerShell as Administrator):
-# ดาวน์โหลด Node.js 18 จาก https://nodejs.org
-# หรือใช้ nvm-windows
-nvm install 18
-nvm use 18
-npm install -g pm2
+Headers ที่ต้องส่งทุก Request:
 
-4.2 คัดลอกไฟล์โปรเจกต์
-# คัดลอกโฟลเดอร์โปรเจกต์ไปยัง Server
-scp -r ar-api-gateway/ user@server:/opt/ar-api-gateway
+```
+X-API-Key: <your_api_key>
+X-Site-ID: <your_site_id>
+Content-Type: application/json
+```
 
-# หรือ Clone จาก Repository
-git clone <repo-url> /opt/ar-api-gateway
+### Health
 
-4.3 ติดตั้ง Dependencies
-# เข้าโฟลเดอร์โปรเจกต์
-cd /opt/ar-api-gateway
+| Method | Endpoint | คำอธิบาย |
+|--------|----------|---------|
+| `GET` | `/health` | ตรวจสอบสถานะ Gateway |
 
-# ติดตั้ง packages (production เท่านั้น)
-npm ci --only=production
+### Authentication
 
-# สร้างโฟลเดอร์ logs
-mkdir -p logs
+| Method | Endpoint | คำอธิบาย |
+|--------|----------|---------|
+| `POST` | `/api/auth/login` | เข้าสู่ระบบ |
+| `POST` | `/api/auth/logout` | ออกจากระบบ |
 
-4.4 สร้างและตั้งค่าไฟล์ .env
-# สร้างไฟล์ .env
-nano /opt/ar-api-gateway/.env
+### AR Management
 
-# วางเนื้อหาตาม Section 3 แล้วแก้ค่าให้ตรงกับ Environment
+| Method | Endpoint | คำอธิบาย |
+|--------|----------|---------|
+| `GET` | `/api/ar` | ดึงรายการ AR ทั้งหมด |
+| `GET` | `/api/ar/:id` | ดึงข้อมูล AR รายการเดียว |
 
-4.5 รัน API Gateway ด้วย PM2
-# Start PM2 ด้วย ecosystem config
-pm2 start ecosystem.config.js
+### HosXP
 
-# ดู Status
-pm2 status
+| Method | Endpoint | คำอธิบาย |
+|--------|----------|---------|
+| `GET` | `/api/hosxp/patient/:hn` | ดึงข้อมูลผู้ป่วยตาม HN |
+| `POST` | `/api/hosxp/import-ar` | นำเข้าข้อมูล AR จาก HosXP |
 
-# ดู Logs แบบ Real-time
-pm2 logs ar-api-gateway
+### Utility
 
-# ตั้งค่า Auto-start เมื่อ Server reboot
-pm2 startup
-# (ทำตามคำสั่งที่แสดงขึ้นมา)
-pm2 save
+| Method | Endpoint | คำอธิบาย |
+|--------|----------|---------|
+| `POST` | `/api/query` | รัน Custom Query |
 
-4.6 คำสั่ง PM2 ที่ใช้บ่อย
-คำสั่ง	การทำงาน
-pm2 start ecosystem.config.js	เริ่มต้น API Gateway
-pm2 stop ar-api-gateway	หยุด API Gateway
-pm2 restart ar-api-gateway	Restart API Gateway
-pm2 reload ar-api-gateway	Reload แบบ Zero-downtime
-pm2 delete ar-api-gateway	ลบออกจาก PM2
-pm2 status	ดูสถานะทุก Process
-pm2 logs ar-api-gateway	ดู Logs แบบ Real-time
-pm2 logs ar-api-gateway --lines 100	ดู 100 บรรทัดล่าสุด
-pm2 monit	Monitor แบบ Interactive
+---
 
-4.7 ตรวจสอบการติดตั้ง (PM2)
-# ทดสอบ Health Check
-curl http://localhost:3001/health
+## 🔗 WebSocket Client
 
-# ผลลัพธ์ที่คาดหวัง:
-{ "status": "ok", "timestamp": "..." }
+`local-gateway-client.js` ทำหน้าที่เชื่อมต่อกับ Proxy Server แล้วรับ-ส่ง Request มายัง API Gateway
 
-5. การติดตั้งด้วย Docker
-Docker เหมาะสำหรับการ Deploy แบบ Containerized ซึ่งช่วยให้ Environment เหมือนกันทุก Server และง่ายต่อการ Scale โดย docker-compose.yml รวม API Gateway และ MySQL ไว้ด้วยกัน
+```bash
+# รันด้วย Node.js โดยตรง
+node local-gateway-client.js
 
-5.1 ติดตั้ง Docker
-สำหรับ Ubuntu/Debian:
-# ติดตั้ง Docker
-curl -fsSL https://get.docker.com | sh
-sudo usermod -aG docker $USER
+# หรือรันผ่าน PM2
+pm2 start local-gateway-client.js --name gateway-client
+```
 
-# ติดตั้ง Docker Compose
-sudo apt-get install -y docker-compose-plugin
+**Flow การทำงาน:**
+```
+Proxy Server → WebSocket → Gateway Client → HTTP → AR API Gateway → MySQL
+```
 
-# ตรวจสอบเวอร์ชัน
-docker --version
-docker compose version
+**ค่าที่ต้องตั้งใน `.env`:**
+```env
+SITE_ID=site-11034-01
+API_KEY=your_api_key
+PROXY_SERVER=ws://209.15.111.58:8088
+```
 
-5.2 คัดลอกไฟล์โปรเจกต์
-# คัดลอกหรือ Clone โปรเจกต์
-scp -r ar-api-gateway/ user@server:/opt/ar-api-gateway
-# หรือ
-git clone <repo-url> /opt/ar-api-gateway
+---
 
-cd /opt/ar-api-gateway
+## 📄 โครงสร้างโปรเจกต์
 
-5.3 สร้างและตั้งค่าไฟล์ .env
-nano /opt/ar-api-gateway/.env
-# วางเนื้อหาตาม Section 3 แล้วแก้ค่าให้ตรงกับ Environment
+```
+accloei/
+├── 📄 server.js                        # API Gateway หลัก
+├── 📄 local-gateway-client.js          # WebSocket Client
+├── 📄 ecosystem.config.js              # PM2 configuration
+├── 🐳 Dockerfile                       # Docker image
+├── 🐳 docker-compose.yml               # Docker Compose (Gateway + MySQL)
+├── 📄 package.json
+├── 📄 .env.example                     # Template .env
+├── 📁 logs/                            # Log files (auto-created)
+│   ├── pm2-error.log
+│   ├── pm2-out.log
+│   ├── error.log
+│   └── combined.log
+└── 📚 docs/
+    └── AR-API-Gateway-Installation-Guide.docx
+```
 
-⚠ หมายเหตุ: ในโหมด Docker หาก MySQL อยู่ใน Container เดียวกัน ให้ใช้ชื่อ service เช่น DB_HOST=mysql แทน IP Address
+---
 
-5.4 Build และ Start Container
-กรณีต้องการรันทั้ง API Gateway + MySQL ใน Docker:
-# Build image และ Start
-docker compose up -d --build
+## 🐛 Troubleshooting
 
-# ดู Status
-docker compose ps
+<details>
+<summary><b>❌ ไม่สามารถเชื่อมต่อฐานข้อมูล (ECONNREFUSED)</b></summary>
 
-กรณีต้องการรันเฉพาะ API Gateway (ใช้ MySQL ภายนอก):
-# Build image เท่านั้น
-docker build -t ar-api-gateway .
+```bash
+# ทดสอบเชื่อมต่อ MySQL โดยตรง
+mysql -h <DB_HOST> -u <DB_USER> -p
 
-# Run container
-docker run -d \
-  --name ar-api-gateway \
-  -p 3001:3001 \
-  --env-file .env \
-  --restart unless-stopped \
-  -v $(pwd)/logs:/app/logs \
-  ar-api-gateway
+# ตรวจสอบ .env ว่า DB_HOST, DB_USER, DB_PASS ถูกต้อง
+cat .env | grep DB_
+```
+</details>
 
-5.5 คำสั่ง Docker ที่ใช้บ่อย
-คำสั่ง	การทำงาน
-docker compose up -d --build	Build และ Start ทุก service
-docker compose down	หยุดและลบ Container
-docker compose restart	Restart ทุก service
-docker compose logs -f api-gateway	ดู Logs แบบ Real-time
-docker compose logs --tail=100	ดู 100 บรรทัดล่าสุด
-docker compose ps	ดูสถานะ Container
-docker compose pull	ดึง image ใหม่
-docker exec -it ar-api-gateway sh	เข้าถึง Shell ใน Container
-docker stats ar-api-gateway	Monitor CPU/RAM แบบ Real-time
+<details>
+<summary><b>❌ Port 3001 ถูกใช้งานอยู่แล้ว</b></summary>
 
-5.6 ตรวจสอบการติดตั้ง (Docker)
-# ทดสอบ Health Check
-curl http://localhost:3001/health
-
-# ดู Health Status จาก Docker
-docker inspect --format='{{.State.Health.Status}}' ar-api-gateway
-
-# ผลลัพธ์ที่คาดหวัง: healthy
-
- 
-6. เปรียบเทียบ PM2 vs Docker
-หัวข้อ	PM2	Docker
-การติดตั้ง	Node.js + PM2 บน Host	Docker Engine เท่านั้น
-Isolation	ใช้ Node.js บน Host โดยตรง	Isolated Container
-Resource Usage	เบากว่า	มี Overhead เล็กน้อย
-Environment	ต้องจัดการ Dependency เอง	Consistent ทุก Server
-Auto-restart	✓ PM2 จัดการ	✓ Docker restart policy
-Scale	Cluster Mode (หลาย CPU)	Scale ด้วย Compose
-Log Management	ไฟล์ใน ./logs/	ไฟล์ใน ./logs/ (volume mount)
-Update	git pull + pm2 restart	docker compose up -d --build
-แนะนำสำหรับ	VPS / Dedicated Server	Server ที่ใช้ Docker อยู่แล้ว
-
- 
-7. การแก้ไขปัญหาที่พบบ่อย
-7.1 ไม่สามารถเชื่อมต่อฐานข้อมูล
-อาการ: ECONNREFUSED หรือ Access denied
-•	ตรวจสอบ DB_HOST ใน .env ว่าถูกต้อง
-•	ตรวจสอบ Username/Password ของฐานข้อมูล
-•	ตรวจสอบว่า MySQL รับ connection จาก IP ของ Server
-•	ทดสอบด้วย: mysql -h <DB_HOST> -u <DB_USER> -p
-
-7.2 Port 3001 ถูกใช้งานอยู่แล้ว
-# ตรวจสอบ process ที่ใช้ Port 3001
+```bash
+# หา process ที่ใช้ port
 lsof -i :3001
-# หรือ
-netstat -tulpn | grep 3001
 
-# แก้ไขโดยเปลี่ยน PORT ใน .env
+# เปลี่ยน port ใน .env
 PORT=3002
+```
+</details>
 
-7.3 PM2 restart loop
-อาการ: PM2 Status แสดง errored หรือ restart ซ้ำ
-# ดู Error log
+<details>
+<summary><b>❌ PM2 restart loop</b></summary>
+
+```bash
+# ดู error log
 pm2 logs ar-api-gateway --err
-
-# หรือดูไฟล์ log โดยตรง
 cat logs/pm2-error.log
+```
+</details>
 
-7.4 Docker Container ไม่ Start
-# ดู Logs ของ Container
+<details>
+<summary><b>❌ Docker container ไม่ start</b></summary>
+
+```bash
+# ดู logs
 docker compose logs api-gateway
 
-# ดู Container events
-docker events --filter container=ar-api-gateway
+# ตรวจสอบ health
+docker inspect --format='{{.State.Health.Status}}' ar-api-gateway
+```
+</details>
 
-7.5 ตรวจสอบ Firewall
-# Ubuntu - เปิด Port 3001
-sudo ufw allow 3001/tcp
+<details>
+<summary><b>❌ WebSocket disconnect บ่อย</b></summary>
 
-# CentOS/RHEL
-sudo firewall-cmd --permanent --add-port=3001/tcp
-sudo firewall-cmd --reload
+Client มี exponential backoff อยู่แล้ว จะ reconnect อัตโนมัติ ตรวจสอบ log:
+```bash
+pm2 logs gateway-client
+```
+</details>
 
- 
-8. การอัปเดตระบบ
-8.1 อัปเดตด้วย PM2
-cd /opt/ar-api-gateway
+---
 
-# ดึงโค้ดใหม่
+## 📚 เอกสารเพิ่มเติม
+
+| เอกสาร | ลิงก์ |
+|--------|-------|
+| 📋 คู่มือติดตั้งฉบับเต็ม | [docs/AR-API-Gateway-Installation-Guide.docx](docs/AR-API-Gateway-Installation-Guide.docx) |
+
+---
+
+## 🔄 การอัปเดต
+
+```bash
+# PM2
 git pull origin main
-
-# ติดตั้ง dependencies ใหม่ถ้ามีการเปลี่ยนแปลง
 npm ci --only=production
-
-# Reload แบบ Zero-downtime
 pm2 reload ar-api-gateway
 
-8.2 อัปเดตด้วย Docker
-cd /opt/ar-api-gateway
-
-# ดึงโค้ดใหม่
+# Docker
 git pull origin main
-
-# Build image ใหม่และ Restart
 docker compose up -d --build
-
-# ลบ image เก่าที่ไม่ใช้
 docker image prune -f
+```
 
-9. แนวทางความปลอดภัย
-•	ตั้งค่า ALLOWED_ORIGINS ให้ระบุเฉพาะ IP ของ Client ที่ต้องการ
-•	ใช้ API_KEY ที่มีความยาวเพียงพอและเดาได้ยาก
-•	ไม่เปิด Port 3001 สู่ Public Internet โดยไม่จำเป็น
-•	เพิ่ม IP ของ Server ที่เชื่อถือได้ใน trustedIPs ใน server.js เพื่อ Bypass rate limit
-•	ตรวจสอบ Logs เป็นประจำที่ ./logs/
-•	ตั้งค่า Firewall ให้อนุญาตเฉพาะ IP ที่จำเป็น
+---
 
+<div align="center">
 
-AR API Gateway Installation Guide | Version 1.0.0 | ar_management System
+**AR API Gateway** • MIT License • [iamharin](https://github.com/iamharin)
+
+</div>
