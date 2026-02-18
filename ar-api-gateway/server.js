@@ -64,9 +64,9 @@ app.use('/api/', limiter);
 // ⭐ Database Configuration - เพิ่ม connectionLimit และ timeout
 const dbConfig = {
     ar_management: {
-        host: process.env.DB_HOST || 'xxx.xxx.xxx.xxx',
-        user: process.env.DB_USER || 'username',
-        password: process.env.DB_PASS || 'password',
+        host: process.env.DB_HOST || '192.168.1.211',
+        user: process.env.DB_USER || 'sa',
+        password: process.env.DB_PASS || 'sibomiN',
         database: process.env.DB_NAME || 'ar_management',
         waitForConnections: true,
         connectionLimit: 50,  // ⭐ เพิ่มจาก 10 เป็น 50
@@ -79,9 +79,9 @@ const dbConfig = {
         keepAliveInitialDelay: 0
     },
     hosxp: {
-        host: process.env.HOSXP_HOST || 'xxx.xxx.xxx.xxx',
-        user: process.env.HOSXP_USER || 'xxxx',
-        password: process.env.HOSXP_PASS || 'xxxx',
+        host: process.env.HOSXP_HOST || '192.168.1.200',
+        user: process.env.HOSXP_USER || '11034',
+        password: process.env.HOSXP_PASS || '11034',
         database: process.env.HOSXP_NAME || 'hos',
         waitForConnections: true,
         connectionLimit: 50,  // ⭐ เพิ่มจาก 10 เป็น 50
@@ -710,6 +710,219 @@ app.post('/api/query', validateApiKey, async (req, res) => {
             message: 'Query execution failed',
             error: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
+    }
+});
+
+// ===========================================
+// Migrate API (DDL สำหรับ Auto Migration)
+// ===========================================
+
+app.post('/api/migrate', validateApiKey, async (req, res) => {
+    try {
+        const { database, statements } = req.body;
+
+        if (database !== 'ar_management') {
+            return res.status(403).json({ success: false, message: 'migrate endpoint รองรับเฉพาะ ar_management' });
+        }
+
+        if (!Array.isArray(statements) || statements.length === 0) {
+            return res.status(400).json({ success: false, message: 'Required: statements (array)' });
+        }
+
+        const ALLOWED = [
+            /^\s*CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS/i,
+            /^\s*CREATE\s+OR\s+REPLACE\s+VIEW/i,
+            /^\s*ALTER\s+TABLE\s+.+ADD\s+COLUMN/i,
+            /^\s*ALTER\s+TABLE\s+.+ADD\s+(UNIQUE\s+)?INDEX/i,
+            /^\s*INSERT\s+INTO\s+`?schema_migrations`?/i,
+            /^\s*DELETE\s+FROM\s+`?schema_migrations`?/i,
+            /^\s*SELECT\s+.+FROM\s+`?schema_migrations`?/i,
+            /^\s*SELECT\s+COUNT\(.+\).+INFORMATION_SCHEMA/i,
+            /^\s*SELECT\s+COUNT\(.+\).+STATISTICS/i,
+        ];
+
+        const BLOCKED = [/DROP\s+TABLE/i, /DROP\s+DATABASE/i, /TRUNCATE/i];
+
+        for (const sql of statements) {
+            const trimmed = sql.trim();
+            if (!trimmed) continue;
+            for (const blocked of BLOCKED) {
+                if (blocked.test(trimmed)) {
+                    logger.warn('Blocked DDL attempt', { sql: trimmed.substring(0, 100), ip: req.ip });
+                    return res.status(403).json({ success: false, message: `ไม่อนุญาต: ${trimmed.substring(0, 60)}...` });
+                }
+            }
+            if (!ALLOWED.some(p => p.test(trimmed))) {
+                return res.status(403).json({ success: false, message: `ไม่อยู่ใน whitelist: ${trimmed.substring(0, 60)}...` });
+            }
+        }
+
+        const results = [];
+        for (const sql of statements) {
+            const trimmed = sql.trim();
+            if (!trimmed) continue;
+            try {
+                await pools.ar_management.query(trimmed);
+                results.push({ success: true, sql: trimmed.substring(0, 80) + (trimmed.length > 80 ? '...' : '') });
+            } catch (err) {
+                const ignorable = ['Duplicate column name', 'already exists', 'Duplicate key name'];
+                const isIgnorable = ignorable.some(msg => err.message.includes(msg));
+                results.push({ success: isIgnorable, skipped: isIgnorable, sql: trimmed.substring(0, 80) + '...', error: err.message });
+                if (!isIgnorable) {
+                    logger.error('Migrate statement failed:', { error: err.message });
+                    return res.status(500).json({ success: false, message: err.message, results });
+                }
+            }
+        }
+
+        logger.info('Migration executed', { count: results.length, ip: req.ip });
+        res.json({ success: true, results });
+
+    } catch (error) {
+        logger.error('Migrate endpoint error:', error);
+        res.status(500).json({ success: false, message: 'Migration failed' });
+    }
+});
+
+// ===========================================
+// Activity Logs API
+// ===========================================
+
+app.post('/api/activity-logs', validateApiKey, async (req, res) => {
+    try {
+        const { user_id, action, table_name, record_id, old_data, new_data, ip_address } = req.body;
+
+        if (!action) {
+            return res.status(400).json({ success: false, message: 'action is required' });
+        }
+
+        const [result] = await pools.ar_management.query(
+            `INSERT INTO activity_logs 
+             (user_id, action, table_name, record_id, old_data, new_data, ip_address)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [
+                user_id   || null,
+                action,
+                table_name || null,
+                record_id  || null,
+                old_data   || null,
+                new_data   || null,
+                ip_address || req.ip
+            ]
+        );
+
+        res.json({ success: true, data: { log_id: result.insertId } });
+
+    } catch (error) {
+        // ถ้า column ไม่มีใน table ให้ลอง INSERT แบบ minimal แทน
+        try {
+            const { user_id, action, ip_address } = req.body;
+            await pools.ar_management.query(
+                `INSERT INTO activity_logs (user_id, action, ip_address) VALUES (?, ?, ?)`,
+                [user_id || null, action || 'unknown', ip_address || req.ip]
+            );
+            res.json({ success: true });
+        } catch (fallbackError) {
+            logger.error('Activity log error:', fallbackError);
+            // ไม่ crash แอป — log แล้วตอบ success เสมอ
+            res.json({ success: true });
+        }
+    }
+});
+
+app.get('/api/activity-logs', validateApiKey, async (req, res) => {
+    try {
+        const { user_id, limit = 50, page = 1 } = req.query;
+        const offset = (page - 1) * limit;
+
+        let where = '';
+        let params = [];
+        if (user_id) {
+            where = 'WHERE user_id = ?';
+            params.push(user_id);
+        }
+
+        const [rows] = await pools.ar_management.query(
+            `SELECT * FROM activity_logs ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+            [...params, parseInt(limit), offset]
+        );
+
+        res.json({ success: true, data: rows });
+
+    } catch (error) {
+        logger.error('Get activity logs error:', error);
+        res.status(500).json({ success: false, message: 'Failed to get activity logs' });
+    }
+});
+
+// ===========================================
+// Notifications API
+// ===========================================
+
+app.post('/api/notifications', validateApiKey, async (req, res) => {
+    try {
+        const { user_id, role, title, message, type = 'info', reference_type, reference_id, action_url, created_by } = req.body;
+
+        if (!title || !message) {
+            return res.status(400).json({ success: false, message: 'title and message are required' });
+        }
+
+        const [result] = await pools.ar_management.query(
+            `INSERT INTO notifications 
+             (user_id, role, title, message, type, reference_type, reference_id, action_url, created_by, is_read, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NOW())`,
+            [user_id || null, role || null, title, message, type, reference_type || null, reference_id || null, action_url || null, created_by || null]
+        );
+
+        res.json({ success: true, data: { notification_id: result.insertId } });
+
+    } catch (error) {
+        logger.error('Create notification error:', error);
+        res.status(500).json({ success: false, message: 'Failed to create notification' });
+    }
+});
+
+app.get('/api/notifications', validateApiKey, async (req, res) => {
+    try {
+        const { user_id, role, is_read, limit = 10 } = req.query;
+
+        let conditions = [];
+        let params = [];
+
+        if (user_id) { conditions.push('(user_id = ? OR user_id IS NULL)'); params.push(user_id); }
+        if (role)    { conditions.push('(role = ? OR role IS NULL)');       params.push(role); }
+        if (is_read !== undefined) { conditions.push('is_read = ?');        params.push(parseInt(is_read)); }
+
+        const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+        const [rows] = await pools.ar_management.query(
+            `SELECT * FROM notifications ${where} ORDER BY created_at DESC LIMIT ?`,
+            [...params, parseInt(limit)]
+        );
+
+        res.json({ success: true, data: { items: rows } });
+
+    } catch (error) {
+        logger.error('Get notifications error:', error);
+        res.status(500).json({ success: false, message: 'Failed to get notifications' });
+    }
+});
+
+app.put('/api/notifications/:id', validateApiKey, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { is_read, read_by } = req.body;
+
+        await pools.ar_management.query(
+            `UPDATE notifications SET is_read = ?, read_at = NOW(), read_by = ? WHERE notification_id = ?`,
+            [is_read ? 1 : 0, read_by || null, id]
+        );
+
+        res.json({ success: true });
+
+    } catch (error) {
+        logger.error('Update notification error:', error);
+        res.status(500).json({ success: false, message: 'Failed to update notification' });
     }
 });
 
