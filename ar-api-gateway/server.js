@@ -64,10 +64,10 @@ app.use('/api/', limiter);
 // ⭐ Database Configuration - เพิ่ม connectionLimit และ timeout
 const dbConfig = {
     ar_management: {
-        host: process.env.DB_HOST || '192.168.1.211',
-        user: process.env.DB_USER || 'sa',
-        password: process.env.DB_PASS || 'sibomiN',
-        database: process.env.DB_NAME || 'ar_management',
+        host: process.env.DB_HOST ,
+        user: process.env.DB_USER ,
+        password: process.env.DB_PASS ,
+        database: process.env.DB_NAME ,
         waitForConnections: true,
         connectionLimit: 50,  // ⭐ เพิ่มจาก 10 เป็น 50
         queueLimit: 0,
@@ -79,10 +79,10 @@ const dbConfig = {
         keepAliveInitialDelay: 0
     },
     hosxp: {
-        host: process.env.HOSXP_HOST || '192.168.1.200',
-        user: process.env.HOSXP_USER || '11034',
-        password: process.env.HOSXP_PASS || '11034',
-        database: process.env.HOSXP_NAME || 'hos',
+        host: process.env.HOSXP_HOST ,
+        user: process.env.HOSXP_USER ,
+        password: process.env.HOSXP_PASS ,
+        database: process.env.HOSXP_NAME ,
         waitForConnections: true,
         connectionLimit: 50,  // ⭐ เพิ่มจาก 10 เป็น 50
         queueLimit: 0,
