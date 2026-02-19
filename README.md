@@ -121,6 +121,7 @@ npm ci --only=production
 
 # Start
 pm2 start ecosystem.config.js
+pm2 start local-gateway-client.js --name "ar-gateway-client"
 
 # ตั้งค่า Auto-start เมื่อ reboot
 pm2 startup && pm2 save
