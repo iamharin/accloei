@@ -8,12 +8,15 @@
 
 const WebSocket = require('ws');
 const axios = require('axios');
+const dotenv = require('dotenv');
+
+dotenv.config();
 
 // ─── Configuration ───────────────────────────────────────────────
-const PROXY_SERVER  = 'ws://209.15.111.58:8088';
-const LOCAL_API_URL = 'http://localhost:3001/api';
-const SITE_ID       = 'site-11034-01';
-const API_KEY       = '8de2e1eb7d23690c2f1105397962f4f1e8b709a6';
+const PROXY_SERVER = process.env.PROXY_SERVER;
+const LOCAL_API_URL = process.env.LOCAL_API_URL;
+const SITE_ID = process.env.SITE_ID;
+const API_KEY = process.env.API_KEY;
 
 const RECONNECT_BASE_DELAY  = 5000;   // เริ่มต้น 5 วินาที
 const RECONNECT_MAX_DELAY   = 60000;  // สูงสุด 60 วินาที
