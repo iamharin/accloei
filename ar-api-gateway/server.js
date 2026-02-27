@@ -66,7 +66,7 @@ const dbConfig = {
     ar_management: {
         host: process.env.DB_HOST ,
         user: process.env.DB_USER ,
-        port: process.env.DB_PORT ,
+        port: process.env.DB_PORT || 3306 ,
         password: process.env.DB_PASS ,
         database: process.env.DB_NAME ,
         waitForConnections: true,
@@ -82,7 +82,7 @@ const dbConfig = {
     hosxp: {
         host: process.env.HOSXP_HOST ,
         user: process.env.HOSXP_USER ,
-        port: process.env.HOSXP_PORT ,
+        port: process.env.HOSXP_PORT || 3306 ,
         password: process.env.HOSXP_PASS ,
         database: process.env.HOSXP_NAME ,
         waitForConnections: true,
