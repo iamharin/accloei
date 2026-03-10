@@ -33,7 +33,7 @@ module.exports = {
       instances: 1,  // WebSocket client ควรรันแค่ 1 instance
       exec_mode: 'fork',  // ใช้ fork mode ไม่ใช่ cluster
       watch: false,
-      max_memory_restart: '512M',
+      max_memory_restart: '1G',
       env: {
         NODE_ENV: 'production'
       },
