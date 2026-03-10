@@ -185,31 +185,40 @@ curl http://localhost:3001/health
 สร้างไฟล์ `.env` จาก `.env.example` แล้วแก้ค่าให้ตรงกับ environment:
 
 ```env
-# ===== Server =====
+# Server Configuration
 NODE_ENV=production
 PORT=3001
+LOG_LEVEL=info
 
-# ===== AR Management Database =====
-DB_HOST=xxx.xxx.xxx.xxx
-DB_USER=your_user
-DB_PASS=your_password
-DB_NAME=ar_management
+# API Security
+API_KEY=ได้จาก super admin
+SITE_ID=ได้จาก super admin
+HCODE=XXXXX //รหัส รพ. 5 หลัก
 
-# ===== HosXP Database =====
-HOSXP_HOST=xxx.xxx.xxx.xxx
-HOSXP_USER=your_user
-HOSXP_PASS=your_password
-HOSXP_NAME=hos
 
-# ===== Security =====
-API_KEY=your_secret_api_key
-SITE_ID=your_site_id
-HCODE=your_hcode
-ALLOWED_ORIGINS=http://your_ip1,http://youp_ip2
-
-# ===== WebSocket Client =====
-PROXY_SERVER=ws://ip-server:8088
+PROXY_SERVER=ws://209.15.111.58:8088
 LOCAL_API_URL=http://localhost:3001/api
+
+# Allowed Origins (comma-separated)
+ALLOWED_ORIGINS=http://209.15.111.58,http://localhost:3000
+
+# AR Management Database
+DB_HOST=xxx.xxx.xxx.xxx
+DB_USER=username
+DB_PASS=password
+DB_NAME=ar_management
+DB_PORT=3306
+
+# HOSxP Database(select only)
+HOSXP_HOST=xxx.xxx.xxx.xxx
+HOSXP_USER=xxxxx
+HOSXP_PASS=xxxxx
+HOSXP_NAME=hos
+HOSXP_PORT=3306
+
+# JWT Configuration (for future use)
+JWT_SECRET=your-jwt-secret-here
+JWT_EXPIRES_IN=24h
 ```
 
 > ⚠️ **อย่า Commit ไฟล์ `.env` ขึ้น Git** เด็ดขาด เพราะมีข้อมูล Password และ API Key
