@@ -9,6 +9,7 @@ services:
       - "3001:3001"
     environment:
       - NODE_ENV=production
+      - NODE_OPTIONS=--dns-result-order=ipv4first
     env_file:
       - .env
     volumes:
