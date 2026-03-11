@@ -1,4 +1,4 @@
-// ecosystem.config.js - รัน 2 processes พร้อมกัน
+// ecosystem.config.js - รัน 2 processes 
 module.exports = {
   apps: [
     // ✅ App 1: API Gateway Server
@@ -30,8 +30,8 @@ module.exports = {
     {
       name: 'local-gateway-client',
       script: './local-gateway-client.js',
-      instances: 1,  // WebSocket client ควรรันแค่ 1 instance
-      exec_mode: 'fork',  // ใช้ fork mode ไม่ใช่ cluster
+      instances: 1,  // WebSocket client 
+      exec_mode: 'fork',  // ใช้ fork mode 
       watch: false,
       max_memory_restart: '1G',
       env: {
