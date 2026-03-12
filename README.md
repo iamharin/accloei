@@ -172,17 +172,16 @@ docker run -d \
 ```bash
 curl http://localhost:3001/health
 ```
-### ✅ เข้าใช้งาน Accloei
-
-```bash
-http://209.15.111.58/
-```
 
 **ผลลัพธ์ที่คาดหวัง:**
 ```json
 { "status": "ok", "timestamp": "2025-01-01T00:00:00.000Z" }
 ```
+### ✅ เข้าใช้งาน Accloei
 
+```bash
+http://209.15.111.58/
+```
 ---
 
 ## ⚙️ Configuration
