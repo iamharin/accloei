@@ -172,6 +172,11 @@ docker run -d \
 ```bash
 curl http://localhost:3001/health
 ```
+### ✅ เข้าใช้งาน Accloei
+
+```bash
+http://209.15.111.58/
+```
 
 **ผลลัพธ์ที่คาดหวัง:**
 ```json
