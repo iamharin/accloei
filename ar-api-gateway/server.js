@@ -64,11 +64,10 @@ app.use('/api/', limiter);
 // ⭐ Database Configuration - เพิ่ม connectionLimit และ timeout
 const dbConfig = {
     ar_management: {
-        host: process.env.DB_HOST ,
-        user: process.env.DB_USER ,
-        port: process.env.DB_PORT || 3306 ,
-        password: process.env.DB_PASS ,
-        database: process.env.DB_NAME ,
+        host: process.env.DB_HOST || '192.168.1.211',
+        user: process.env.DB_USER || 'sa',
+        password: process.env.DB_PASS || 'sibomiN',
+        database: process.env.DB_NAME || 'ar_management',
         waitForConnections: true,
         connectionLimit: 50,  // ⭐ เพิ่มจาก 10 เป็น 50
         queueLimit: 0,
@@ -77,14 +76,18 @@ const dbConfig = {
         acquireTimeout: 10000,      // ⭐ เพิ่ม acquire timeout
         timeout: 60000,             // ⭐ เพิ่ม query timeout
         enableKeepAlive: true,      // ⭐ เพิ่ม keep alive
-        keepAliveInitialDelay: 0
+        keepAliveInitialDelay: 0,
+        // ✅ เพิ่ม: Timezone settings
+        timezone: '+07:00',
+        dateStrings: true,
+        supportBigNumbers: true,
+        bigNumberStrings: true
     },
     hosxp: {
-        host: process.env.HOSXP_HOST ,
-        user: process.env.HOSXP_USER ,
-        port: process.env.HOSXP_PORT || 3306 ,
-        password: process.env.HOSXP_PASS ,
-        database: process.env.HOSXP_NAME ,
+        host: process.env.HOSXP_HOST || '192.168.1.200',
+        user: process.env.HOSXP_USER || '11034',
+        password: process.env.HOSXP_PASS || '11034',
+        database: process.env.HOSXP_NAME || 'hos',
         waitForConnections: true,
         connectionLimit: 50,  // ⭐ เพิ่มจาก 10 เป็น 50
         queueLimit: 0,
@@ -93,7 +96,12 @@ const dbConfig = {
         acquireTimeout: 10000,
         timeout: 60000,
         enableKeepAlive: true,
-        keepAliveInitialDelay: 0
+        keepAliveInitialDelay: 0,
+        // ✅ เพิ่ม: Timezone settings
+        timezone: '+07:00',
+        dateStrings: true,
+        supportBigNumbers: true,
+        bigNumberStrings: true
     }
 };
 
@@ -102,6 +110,15 @@ const pools = {
     ar_management: mysql.createPool(dbConfig.ar_management),
     hosxp: mysql.createPool(dbConfig.hosxp)
 };
+
+// ✅ เพิ่ม: ตั้ง timezone สำหรับทุก connection
+pools.ar_management.on('connection', (connection) => {
+    connection.query("SET SESSION time_zone = '+07:00'");
+});
+
+pools.hosxp.on('connection', (connection) => {
+    connection.query("SET SESSION time_zone = '+07:00'");
+});
 
 pools.ar_management.on('connection', (connection) => {
     connection.query('SET NAMES utf8mb4');
@@ -678,6 +695,7 @@ app.get('/api/ar/:id', validateApiKey, async (req, res) => {
 });
 
 app.post('/api/query', validateApiKey, async (req, res) => {
+    let connection = null;  // ✅ เพิ่ม
     try {
         const { database, query, params = [] } = req.body;
 
@@ -698,7 +716,12 @@ app.post('/api/query', validateApiKey, async (req, res) => {
             });
         }
 
-        const [results] = await pools[database].query(query, params);
+        // ✅ เพิ่ม: ดึง connection และ SET timezone ก่อน query
+        connection = await pools[database].getConnection();
+        await connection.query("SET SESSION time_zone = '+07:00'");
+        
+        // ✅ ใช้ connection แทน pool.query()
+        const [results] = await connection.query(query, params);
 
         res.json({
             success: true,
@@ -712,6 +735,11 @@ app.post('/api/query', validateApiKey, async (req, res) => {
             message: 'Query execution failed',
             error: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
+    } finally {
+        // ✅ เพิ่ม: Release connection กลับไป pool
+        if (connection) {
+            connection.release();
+        }
     }
 });
 
