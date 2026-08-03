@@ -1,109 +1,154 @@
--- ===================================
--- Stored Procedure สำหรับจับคู่ Statement
--- (ใช้ตารางเดิมที่มีอยู่แล้ว)
--- ===================================
- 
-DELIMITER //
- 
--- Drop ถ้ามีอยู่แล้ว
-DROP PROCEDURE IF EXISTS sp_match_statement_with_ar //
- 
 CREATE PROCEDURE sp_match_statement_with_ar(
-  IN p_statement_import_id INT
+    IN p_statement_import_id INT
 )
 BEGIN
-  DECLARE done INT DEFAULT FALSE;
-  DECLARE v_detail_id INT;
-  DECLARE v_hn VARCHAR(20);
-  DECLARE v_vn VARCHAR(20);
-  DECLARE v_an VARCHAR(20);
-  DECLARE v_approved_amount DECIMAL(12,2);
-  DECLARE v_person_type VARCHAR(10);
-  DECLARE v_ar_id INT;
-  
-  DECLARE cur CURSOR FOR 
-    SELECT statement_detail_id, hn, vn, an, approved_amount, patient_type
-    FROM statement_details
-    WHERE statement_import_id = p_statement_import_id
-      AND match_status = 'pending';
-      
-  DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
-  
-  OPEN cur;
-  
-  read_loop: LOOP
-    FETCH cur INTO v_detail_id, v_hn, v_vn, v_an, v_approved_amount, v_person_type;
-    
-    IF done THEN
-      LEAVE read_loop;
-    END IF;
-    
-    -- จับคู่ตาม HN + VN (สำหรับ OP) หรือ HN + AN (สำหรับ IP)
-    SET v_ar_id = NULL;
-    
-    IF v_person_type = 'OP' AND v_hn IS NOT NULL AND v_vn IS NOT NULL THEN
-      SELECT ar_id INTO v_ar_id
-      FROM accounts_receivable
-      WHERE hn = v_hn AND vn = v_vn
-      ORDER BY created_at DESC
-      LIMIT 1;
-    ELSEIF v_person_type = 'IP' AND v_hn IS NOT NULL AND v_an IS NOT NULL THEN
-      SELECT ar_id INTO v_ar_id
-      FROM accounts_receivable
-      WHERE hn = v_hn AND an = v_an
-      ORDER BY created_at DESC
-      LIMIT 1;
-    END IF;
-    
-    -- Update statement detail
-    IF v_ar_id IS NOT NULL THEN
-      UPDATE statement_details
-      SET ar_id = v_ar_id,
-          match_status = 'matched',
-          updated_at = NOW()
-      WHERE statement_detail_id = v_detail_id;
-      
-      -- Update AR (รักษา logic เดิม)
-      UPDATE accounts_receivable
-      SET statement_approved_amount = v_approved_amount,
-          total_approved_amount = COALESCE(rep_approved_amount, 0) + v_approved_amount,
-          balance = ar_amount - v_approved_amount,
-          statement_matched_at = NOW(),
-          status = CASE 
-            WHEN v_approved_amount >= ar_amount THEN 'paid'
-            ELSE status 
-          END
-      WHERE ar_id = v_ar_id;
-    ELSE
-      UPDATE statement_details
-      SET match_status = 'not_matched',
-          match_note = 'ไม่พบ AR ที่ตรงกัน',
-          updated_at = NOW()
-      WHERE statement_detail_id = v_detail_id;
-    END IF;
-    
-  END LOOP;
-  
-  CLOSE cur;
-  
-  -- Update summary (ใช้ตารางเดิม)
-  UPDATE statement_import_logs
-  SET matched_records = (
-        SELECT COUNT(*) 
-        FROM statement_details 
-        WHERE statement_import_id = p_statement_import_id 
-          AND match_status = 'matched'
-      ),
-      unmatched_records = (
-        SELECT COUNT(*) 
-        FROM statement_details 
-        WHERE statement_import_id = p_statement_import_id 
-          AND match_status = 'not_matched'
-      ),
-      import_status = 'completed',
-      updated_at = NOW()
-  WHERE statement_import_id = p_statement_import_id;
-  
-END //
- 
-DELIMITER ;
+    DECLARE done BOOLEAN DEFAULT FALSE;
+    DECLARE v_detail_id INT;
+    DECLARE v_hn VARCHAR(20);
+    DECLARE v_vn VARCHAR(20);
+    DECLARE v_an VARCHAR(20);
+    DECLARE v_approved_amount DECIMAL(12,2);
+    DECLARE v_patient_type VARCHAR(10);
+    DECLARE v_ar_id INT;
+
+    DECLARE cur CURSOR FOR
+        SELECT
+            statement_detail_id,
+            hn,
+            vn,
+            an,
+            COALESCE(approved_amount, 0),
+            patient_type
+        FROM statement_details
+        WHERE statement_import_id = p_statement_import_id
+          AND match_status = 'pending';
+
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+
+    OPEN cur;
+
+    read_loop: LOOP
+        FETCH cur INTO
+            v_detail_id,
+            v_hn,
+            v_vn,
+            v_an,
+            v_approved_amount,
+            v_patient_type;
+
+        IF done THEN
+            LEAVE read_loop;
+        END IF;
+
+        SET v_ar_id = NULL;
+
+        IF UPPER(TRIM(v_patient_type)) = 'OP'
+           AND NULLIF(TRIM(v_hn), '') IS NOT NULL
+           AND NULLIF(TRIM(v_vn), '') IS NOT NULL THEN
+
+            SET v_ar_id = (
+                SELECT ar.ar_id
+                FROM accounts_receivable ar
+                WHERE ar.hn = v_hn
+                  AND ar.vn = v_vn
+                  AND COALESCE(ar.status, '') <> 'cancelled'
+                ORDER BY ar.created_at DESC, ar.ar_id DESC
+                LIMIT 1
+            );
+
+        ELSEIF UPPER(TRIM(v_patient_type)) = 'IP'
+           AND NULLIF(TRIM(v_hn), '') IS NOT NULL
+           AND NULLIF(TRIM(v_an), '') IS NOT NULL THEN
+
+            SET v_ar_id = (
+                SELECT ar.ar_id
+                FROM accounts_receivable ar
+                WHERE ar.hn = v_hn
+                  AND ar.an = v_an
+                  AND COALESCE(ar.status, '') <> 'cancelled'
+                ORDER BY ar.created_at DESC, ar.ar_id DESC
+                LIMIT 1
+            );
+
+        END IF;
+
+        IF v_ar_id IS NOT NULL THEN
+
+            UPDATE statement_details
+            SET ar_id = v_ar_id,
+                match_status = 'matched',
+                match_note = NULL,
+                updated_at = NOW()
+            WHERE statement_detail_id = v_detail_id;
+
+            UPDATE accounts_receivable
+            SET statement_approved_amount = v_approved_amount,
+                total_approved_amount =
+                    COALESCE(rep_approved_amount, 0)
+                    + COALESCE(v_approved_amount, 0),
+                balance = GREATEST(
+                    COALESCE(ar_amount, 0)
+                    - (
+                        COALESCE(rep_approved_amount, 0)
+                        + COALESCE(v_approved_amount, 0)
+                    ),
+                    0
+                ),
+                statement_matched_at = NOW(),
+                status = CASE
+                    WHEN (
+                        COALESCE(rep_approved_amount, 0)
+                        + COALESCE(v_approved_amount, 0)
+                    ) >= COALESCE(ar_amount, 0)
+                    THEN 'paid'
+                    ELSE status
+                END,
+                updated_at = NOW()
+            WHERE ar_id = v_ar_id;
+
+        ELSE
+
+            UPDATE statement_details
+            SET ar_id = NULL,
+                match_status = 'not_matched',
+                match_note = CASE
+                    WHEN NULLIF(TRIM(v_hn), '') IS NULL
+                        THEN 'ไม่พบ HN'
+                    WHEN UPPER(TRIM(v_patient_type)) = 'OP'
+                         AND NULLIF(TRIM(v_vn), '') IS NULL
+                        THEN 'ไม่พบ VN สำหรับผู้ป่วยนอก'
+                    WHEN UPPER(TRIM(v_patient_type)) = 'IP'
+                         AND NULLIF(TRIM(v_an), '') IS NULL
+                        THEN 'ไม่พบ AN สำหรับผู้ป่วยใน'
+                    WHEN UPPER(TRIM(v_patient_type)) NOT IN ('OP', 'IP')
+                         OR v_patient_type IS NULL
+                        THEN 'ประเภทผู้ป่วยไม่ถูกต้อง'
+                    ELSE 'ไม่พบ AR ที่ตรงกัน'
+                END,
+                updated_at = NOW()
+            WHERE statement_detail_id = v_detail_id;
+
+        END IF;
+
+    END LOOP;
+
+    CLOSE cur;
+
+    UPDATE statement_import_logs sil
+    SET sil.matched_records = (
+            SELECT COUNT(*)
+            FROM statement_details sd
+            WHERE sd.statement_import_id = p_statement_import_id
+              AND sd.match_status = 'matched'
+        ),
+        sil.unmatched_records = (
+            SELECT COUNT(*)
+            FROM statement_details sd
+            WHERE sd.statement_import_id = p_statement_import_id
+              AND sd.match_status = 'not_matched'
+        ),
+        sil.import_status = 'completed',
+        sil.updated_at = NOW()
+    WHERE sil.statement_import_id = p_statement_import_id;
+
+END
