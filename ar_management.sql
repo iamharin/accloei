@@ -70,6 +70,21 @@ CREATE TABLE `accounts_receivable` (
 -- ----------------------------
 
 -- ----------------------------
+-- Table structure for schema_migrations
+-- ----------------------------
+DROP TABLE IF EXISTS `schema_migrations`;
+CREATE TABLE `schema_migrations`  (
+  `id` int UNSIGNED NOT NULL AUTO_INCREMENT,
+  `version` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `applied_at` timestamp NULL DEFAULT current_timestamp(),
+  `success` tinyint(1) NULL DEFAULT 1,
+  PRIMARY KEY (`id`) USING BTREE,
+  UNIQUE INDEX `version`(`version` ASC) USING BTREE,
+  INDEX `idx_version`(`version` ASC) USING BTREE
+) ENGINE = InnoDB AUTO_INCREMENT = 267 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = 'ติดตาม database migrations' ROW_FORMAT = Dynamic;
+
+
+-- ----------------------------
 -- Table structure for account_std
 -- ----------------------------
 DROP TABLE IF EXISTS `account_std`;
